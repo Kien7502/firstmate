@@ -22,7 +22,7 @@ const DEFAULT_REFRESH_MS = 30_000;
 
 const extensionFile = fileURLToPath(import.meta.url);
 const extensionDir = dirname(extensionFile);
-const root = resolve(extensionDir, "..");
+const root = resolve(extensionDir, "../..");
 
 export default function (pi: ExtensionAPI) {
   const fmHome = process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || root;
