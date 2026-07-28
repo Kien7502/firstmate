@@ -1,6 +1,6 @@
 // Firstmate's home-persistent Pi footer indicator for queued/scheduled commands.
 //
-// Reads the private schedule file at data/scheduled-commands.json (see
+// Reads the private schedule file at state/scheduled-commands.json (see
 // docs/configuration.md "Scheduled command footer" for the complete file-format
 // contract) and mirrors its pending items in the footer via ctx.ui.setStatus() - the
 // same supported extension footer/status hook Firstmate's fm-calm.ts and Herdr's
@@ -26,8 +26,8 @@ const root = resolve(extensionDir, "../..");
 
 export default function (pi: ExtensionAPI) {
   const fmHome = process.env.FM_HOME || process.env.FM_ROOT_OVERRIDE || root;
-  const dataDirectory = process.env.FM_DATA_OVERRIDE || resolve(fmHome, "data");
-  const scheduleFilePath = resolve(dataDirectory, "scheduled-commands.json");
+  const stateDirectory = process.env.FM_STATE_OVERRIDE || resolve(fmHome, "state");
+  const scheduleFilePath = resolve(stateDirectory, "scheduled-commands.json");
   const refreshMs = Number(process.env.FM_PENDING_FOOTER_REFRESH_MS) || DEFAULT_REFRESH_MS;
 
   let timer: ReturnType<typeof setInterval> | undefined;

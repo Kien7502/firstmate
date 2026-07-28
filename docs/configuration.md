@@ -31,13 +31,13 @@ The `/calm` command replaces the file atomically before changing live presentati
 The extension reloads this preference on every Pi `session_start`, including startup, new, resume, fork, and reload reasons.
 This preference is local to each Firstmate home and is not part of secondmate inherited configuration.
 
-## Scheduled command footer (data/scheduled-commands.json)
+## Scheduled command footer (state/scheduled-commands.json)
 
 The tracked Pi extension `.pi/extensions/fm-pending-command-footer.ts` mirrors queued or scheduled captain work in Pi's footer/status row using `ctx.ui.setStatus()`, the same supported extension footer hook Firstmate's own `fm-calm.ts` and Herdr's managed `quota-status.ts` extension already use.
 This is display only: the extension never executes, reschedules, or dismisses a command, and the actual wake mechanism that resumes queued work - the watcher, the durable wake queue, or a quota-reset scheduler - remains authoritative and entirely independent of this file.
 The parsing and formatting logic lives in `.pi/extensions/lib/fm-pending-command-schedule.ts`, a pure module with no runtime dependency on the installed Pi package, tested directly in `tests/fm-pending-command-schedule.test.sh`.
 
-The extension reads gitignored `data/scheduled-commands.json` under the effective Firstmate home, resolved the same way as other home-local Pi extensions: `FM_HOME`, then `FM_ROOT_OVERRIDE`, then the tracked code root derived from the extension path, or `FM_DATA_OVERRIDE` when that test override is present.
+The extension reads gitignored `state/scheduled-commands.json` under the effective Firstmate home, resolved the same way as other home-local Pi extensions: `FM_HOME`, then `FM_ROOT_OVERRIDE`, then the tracked code root derived from the extension path, or `FM_STATE_OVERRIDE` when that test override is present.
 The file is optional; an absent, unreadable, or malformed file is harmless and renders the idle footer text rather than an error or a stale value.
 The document shape is a JSON object with an `items` array:
 

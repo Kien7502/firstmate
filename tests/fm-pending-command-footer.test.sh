@@ -43,6 +43,16 @@ test_static_contract() {
   pass "pending-command footer extension is wired to the supported setStatus() hook, refreshes over time, and never executes anything"
 }
 
+test_state_path_contract() {
+  local text
+  text=$(cat "$EXT")
+  assert_contains "$text" 'resolve(fmHome, "state")' "extension does not resolve its schedule file under the private state/ directory"
+  assert_contains "$text" 'process.env.FM_STATE_OVERRIDE' "extension does not honor the FM_STATE_OVERRIDE test override used by the rest of the fleet's home-local state paths"
+  assert_not_contains "$text" 'resolve(fmHome, "data")' "extension must not resolve its schedule file under the shared data/ directory"
+  assert_not_contains "$text" 'FM_DATA_OVERRIDE' "extension must not read the FM_DATA_OVERRIDE test override; the schedule file is state, not data"
+  pass "pending-command footer extension reads its schedule file from the authoritative private state/ directory, not data/"
+}
+
 test_mock_lifecycle() {
   local out status
   if ! command -v node >/dev/null 2>&1; then
@@ -51,8 +61,8 @@ test_mock_lifecycle() {
   fi
 
   local fixture_home="$TMP_ROOT/home"
-  mkdir -p "$fixture_home/data"
-  cat > "$fixture_home/data/scheduled-commands.json" <<'DATA'
+  mkdir -p "$fixture_home/state"
+  cat > "$fixture_home/state/scheduled-commands.json" <<'DATA'
 {
   "version": 1,
   "items": [
@@ -92,8 +102,8 @@ if (!initial || !initial.includes("Resume Beepaws work") || !initial.includes("1
 
 // Mark the item completed and let the refresh timer pick it up without any explicit
 // re-init - this is the "refreshes as time elapses" contract, not a one-shot read.
-const dataFile = path.resolve(process.env.FM_HOME, "data", "scheduled-commands.json");
-fs.writeFileSync(dataFile, JSON.stringify({
+const stateFile = path.resolve(process.env.FM_HOME, "state", "scheduled-commands.json");
+fs.writeFileSync(stateFile, JSON.stringify({
   version: 1,
   items: [{ label: "Resume Beepaws work", due: "2026-07-28T16:10:00+07:00", state: "completed" }],
 }));
@@ -104,7 +114,7 @@ if (afterCompletion !== "No commands scheduled") {
 }
 
 // Missing file after having had data must degrade harmlessly to idle, not throw.
-fs.rmSync(dataFile);
+fs.rmSync(stateFile);
 await new Promise((resolve) => setTimeout(resolve, 300));
 const afterRemoval = statuses.get("firstmate-pending-commands");
 if (afterRemoval !== "No commands scheduled") {
@@ -112,7 +122,7 @@ if (afterRemoval !== "No commands scheduled") {
 }
 
 // Malformed file content must also degrade harmlessly rather than throwing/crashing.
-fs.writeFileSync(dataFile, "{ not valid json");
+fs.writeFileSync(stateFile, "{ not valid json");
 await new Promise((resolve) => setTimeout(resolve, 300));
 const afterMalformed = statuses.get("firstmate-pending-commands");
 if (afterMalformed !== "No commands scheduled") {
@@ -149,8 +159,8 @@ test_home_resolution() {
   fi
 
   local override="$TMP_ROOT/override-home"
-  mkdir -p "$override/data"
-  cat > "$override/data/scheduled-commands.json" <<'DATA'
+  mkdir -p "$override/state"
+  cat > "$override/state/scheduled-commands.json" <<'DATA'
 { "version": 1, "items": [ { "label": "Override home item", "due": "2026-07-28T16:10:00+07:00", "state": "pending" } ] }
 DATA
 
@@ -197,11 +207,11 @@ test_real_pi_footer_smoke() {
   fi
 
   project="$TMP_ROOT/real-pi-project"
-  mkdir -p "$project/.pi/extensions/lib" "$project/data"
+  mkdir -p "$project/.pi/extensions/lib" "$project/state"
   fm_git_init_commit "$project"
   cp "$EXT" "$project/.pi/extensions/fm-pending-command-footer.ts"
   cp "$LIB" "$project/.pi/extensions/lib/fm-pending-command-schedule.ts"
-  cat > "$project/data/scheduled-commands.json" <<'DATA'
+  cat > "$project/state/scheduled-commands.json" <<'DATA'
 {
   "version": 1,
   "items": [
@@ -240,6 +250,7 @@ DATA
 }
 
 test_static_contract
+test_state_path_contract
 test_mock_lifecycle
 test_home_resolution
 test_real_pi_footer_smoke
