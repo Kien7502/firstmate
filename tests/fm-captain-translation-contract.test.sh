@@ -270,7 +270,7 @@ test_ahoy_user_role_injections_share_one_marker() {
   assert_contains "$pi_watch" '"watcher"' \
     "Pi watcher does not retain its exact current kind"
   assert_contains "$spawn" 'encode launch-brief' \
-    "cross-harness launches do not use the canonical launch-instruction kind"
+    "non-Claude positional launches do not use the canonical launch-instruction kind"
   for producer in "$daemon" "$grok_guard" "$opencode_guard" "$opencode_watch" "$pi_guard" "$pi_watch" "$sessionstart" "$spawn"; do
     assert_not_contains "$producer" 'FIRSTMATE_OP: ' \
       "a current producer copied the canonical marker grammar"
