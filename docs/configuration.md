@@ -31,6 +31,34 @@ The `/calm` command replaces the file atomically before changing live presentati
 The extension reloads this preference on every Pi `session_start`, including startup, new, resume, fork, and reload reasons.
 This preference is local to each Firstmate home and is not part of secondmate inherited configuration.
 
+## Scheduled command footer (data/scheduled-commands.json)
+
+The tracked Pi extension `.pi/extensions/fm-pending-command-footer.ts` mirrors queued or scheduled captain work in Pi's footer/status row using `ctx.ui.setStatus()`, the same supported extension footer hook Firstmate's own `fm-calm.ts` and Herdr's managed `quota-status.ts` extension already use.
+This is display only: the extension never executes, reschedules, or dismisses a command, and the actual wake mechanism that resumes queued work - the watcher, the durable wake queue, or a quota-reset scheduler - remains authoritative and entirely independent of this file.
+The parsing and formatting logic lives in `.pi/extensions/lib/fm-pending-command-schedule.ts`, a pure module with no runtime dependency on the installed Pi package, tested directly in `tests/fm-pending-command-schedule.test.sh`.
+
+The extension reads gitignored `data/scheduled-commands.json` under the effective Firstmate home, resolved the same way as other home-local Pi extensions: `FM_HOME`, then `FM_ROOT_OVERRIDE`, then the tracked code root derived from the extension path, or `FM_DATA_OVERRIDE` when that test override is present.
+The file is optional; an absent, unreadable, or malformed file is harmless and renders the idle footer text rather than an error or a stale value.
+The document shape is a JSON object with an `items` array:
+
+```json
+{
+  "version": 1,
+  "items": [
+    { "label": "Resume Beepaws work", "due": "2026-07-28T16:10:00+07:00", "state": "pending" }
+  ]
+}
+```
+
+Each item has exactly three fields, and a malformed item is dropped individually rather than failing the whole document.
+`label` is a human-safe display string; the parser strips control characters, collapses whitespace, and caps it at 60 characters, so it can never carry a shell command, secret, or arbitrary escape sequence into the footer.
+`due` is an ISO-8601 timestamp with an explicit `Z` or numeric UTC offset, so a due time is unambiguous regardless of which zone the captain, the operator, or the machine running Pi sits in; the footer formats it in the viewer's own local time.
+`state` is exactly `pending` or `completed`.
+
+The footer shows a compact count of pending items plus the soonest-due one's label and local due time, marking it `(overdue)` once that time has passed, and the required explicit idle text `No commands scheduled` when nothing is pending.
+It refreshes on Pi's `session_start`, on `agent_settled`, and on a timer (`FM_PENDING_FOOTER_REFRESH_MS`, default 30000ms) so a completed item, a newly added item, or an overdue transition shows up without requiring a session restart; the timer is cleared on `session_shutdown` along with the footer status itself.
+Nothing in this file is consulted by any wake or resume mechanism; populating it is purely for display.
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
@@ -424,6 +452,7 @@ FM_WATCH_REARM_RETRY_LIMIT=5   # Pi/OpenCode adapter launch-failure retries befo
 FM_WATCH_CYCLE_LOG_MAX_BYTES=262144   # size cap for the arm-owned watcher lifecycle ledger
 FM_WATCH_CYCLE_LOG_KEEP_LINES=1000   # newest complete lifecycle rows considered when the ledger is capped
 FM_WATCHER_STALE_GRACE=300   # defaults to FM_GUARD_GRACE; seconds a live watcher lock may have a stale beacon before re-arm errors
+FM_PENDING_FOOTER_REFRESH_MS=30000   # milliseconds between pending-command footer refreshes (see "Scheduled command footer" above)
 FM_SIGNAL_GRACE=30      # seconds to coalesce nearby status and turn-end signals into one wake
 FM_CAPTAIN_RE='done:|needs-decision:|blocked:|failed:|PR ready|checks green|ready in branch|merged'   # captain-relevant status regex; nonterminal progress verbs remain excluded even when their prose matches
 FM_CLASSIFY_PAUSED_VERB=paused     # leading status verb for a declared external wait; excluded from FM_CAPTAIN_RE and distinct from blocked
