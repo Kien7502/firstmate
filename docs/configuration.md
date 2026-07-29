@@ -33,9 +33,13 @@ This preference is local to each Firstmate home and is not part of secondmate in
 
 ## Scheduled command footer (state/scheduled-commands.json)
 
-The tracked Pi extension `.pi/extensions/fm-pending-command-footer.ts` mirrors queued or scheduled captain work in Pi's footer/status row using `ctx.ui.setStatus()`, the same supported extension footer hook Firstmate's own `fm-calm.ts` and Herdr's managed `quota-status.ts` extension already use.
+The tracked Pi extension `.pi/extensions/fm-pending-command-footer.ts` mirrors queued or scheduled captain work as its own distinct line in Pi's footer, beneath quota/usage and any other extension's own `ctx.ui.setStatus()` row (Herdr's managed `quota-status.ts` extension included).
+It uses `ctx.ui.setFooter()` rather than `ctx.ui.setStatus()`: Pi's built-in footer joins every `setStatus()` text onto one shared row, and scheduled-command status needs its own line instead of being concatenated onto quota/usage's row.
+Owning the footer this way means the extension must also reproduce Pi's built-in pwd/stats/model line and the (now quota-only) extension-status row; that reproduction is a pure, hand-rolled reimplementation in `.pi/extensions/lib/fm-footer-stats.ts`, kept in sync by hand against Pi's own `modes/interactive/components/footer.js` and tested in `tests/fm-footer-stats.test.sh`.
+Two display details are unavailable through the documented extension API and are intentionally approximated: the auto-compaction `(auto)` suffix always assumes auto-compaction is enabled, and the experimental-features `xp` badge is never shown.
 This is display only: the extension never executes, reschedules, or dismisses a command, and the actual wake mechanism that resumes queued work - the watcher, the durable wake queue, or a quota-reset scheduler - remains authoritative and entirely independent of this file.
-The parsing and formatting logic lives in `.pi/extensions/lib/fm-pending-command-schedule.ts`, a pure module with no runtime dependency on the installed Pi package, tested directly in `tests/fm-pending-command-schedule.test.sh`.
+The schedule-file parsing and formatting logic lives in `.pi/extensions/lib/fm-pending-command-schedule.ts`, a pure module with no runtime dependency on the installed Pi package, tested directly in `tests/fm-pending-command-schedule.test.sh`.
+Both library modules use only type-only imports from the Pi packages (erased at runtime by Node's native TypeScript support), so neither needs a Pi install or version pin to test.
 
 The extension reads gitignored `state/scheduled-commands.json` under the effective Firstmate home, resolved the same way as other home-local Pi extensions: `FM_HOME`, then `FM_ROOT_OVERRIDE`, then the tracked code root derived from the extension path, or `FM_STATE_OVERRIDE` when that test override is present.
 The file is optional; an absent, unreadable, or malformed file is harmless and renders the idle footer text rather than an error or a stale value.
@@ -56,7 +60,7 @@ Each item has exactly three fields, and a malformed item is dropped individually
 `state` is exactly `pending` or `completed`.
 
 The footer shows a compact count of pending items plus the soonest-due one's label and local due time, marking it `(overdue)` once that time has passed, and the required explicit idle text `No commands scheduled` when nothing is pending.
-It refreshes on Pi's `session_start`, on `agent_settled`, and on a timer (`FM_PENDING_FOOTER_REFRESH_MS`, default 30000ms) so a completed item, a newly added item, or an overdue transition shows up without requiring a session restart; the timer is cleared on `session_shutdown` along with the footer status itself.
+It refreshes on Pi's `session_start`, on `agent_settled`, and on a timer (`FM_PENDING_FOOTER_REFRESH_MS`, default 30000ms) so a completed item, a newly added item, or an overdue transition shows up without requiring a session restart; the timer is cleared and Pi's built-in footer is restored on `session_shutdown`.
 Nothing in this file is consulted by any wake or resume mechanism; populating it is purely for display.
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
