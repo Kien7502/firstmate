@@ -980,7 +980,7 @@ test_perl_fallback_bounds_github_call() {
   fakebin=$(make_fakebin "$home")
   toolbin="$home/toolbin"
   mkdir -p "$toolbin"
-  for cmd in bash dirname basename jq date sed git grep tail cut tr head sort wc perl sleep cat find; do
+  for cmd in bash dirname basename jq date sed git grep tail cut tr head sort wc perl sleep cat find mktemp rm; do
     ln -s "$(command -v "$cmd")" "$toolbin/$cmd"
   done
   started=$(date +%s)
@@ -1075,6 +1075,24 @@ test_per_repository_pr_cap_is_disclosed() {
   ' >/dev/null || fail "per-repository PR truncation was not disclosed: $json"
   assert_contains "$toon" 'candidate_prs showing 2 of at least 3' "TOON did not preserve PR truncation disclosure"
   pass "per-repository open-PR caps are disclosed with an expansion knob"
+}
+
+# The delegated fleet snapshot used to abort with "Argument list too long" once
+# whole-fleet values outgrew MAX_ARG_STRLEN (128 KiB), the per-argument argv cap,
+# which took the ordinary bearings report down with it. A fleet past that size
+# must still report, and must still see every entry.
+test_large_fleet_bearings_report_succeeds() {
+  local home fakebin json
+  home=$(make_home large-fleet); write_large_fixture "$home" 100
+  fakebin=$(make_fakebin "$home")
+  json=$(run "$home" "$fakebin" --json --all-in-flight --all-decisions) \
+    || fail "bearings must still report for a fleet past the argv cap"
+  printf '%s' "$json" | jq -e '
+    .schema == "fm-bearings.v1"
+      and (.in_flight | length) == 100
+      and (.decisions_open | length) == 100
+  ' >/dev/null || fail "large fleet bearings dropped entries: $(printf '%s' "$json" | head -c 400)"
+  pass "a fleet past the argv cap still produces a complete bearings report"
 }
 
 install_failing_jq() {  # <fakebin> <model|toon>
@@ -1931,4 +1949,5 @@ test_perl_fallback_bounds_github_call
 test_section_caps_and_expansion_flags
 test_pr_repository_cap_and_expansion
 test_per_repository_pr_cap_is_disclosed
+test_large_fleet_bearings_report_succeeds
 test_projection_and_toon_fail_closed
