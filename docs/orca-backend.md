@@ -34,13 +34,13 @@ The normal isolation and unlanded-work refusal rules still apply.
 
 ```text
 backend=orca
-window=fm-<id>
+window=<id>
 terminal=<orca terminal handle>
 orca_worktree_id=<orca worktree id>
 worktree=<absolute Orca worktree path>
 ```
 
-`window=` remains the caller-facing Firstmate alias.
+`window=` remains the caller-facing Firstmate alias - the bare validated task id, with no generic `fm-` prefix (a task alias from before this format changed was `fm-<id>`; that legacy form is still recognized).
 `terminal=` and `orca_worktree_id=` are the backend authority used by operation and cleanup paths.
 
 ## Current lifecycle and safety

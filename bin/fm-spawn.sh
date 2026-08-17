@@ -943,14 +943,25 @@ herdr_projection_existing_meta_allows_flat() {  # <meta>
   esac
 }
 
-W="fm-$ID"
+# W is the caller-facing task label: the validated task id itself, with no
+# generic "fm-" prefix (docs/architecture.md "Runtime session backends").
+# It is NOT the durable per-home container name -
+# tmux's/herdr's own home-scoped session/workspace is still literally
+# "firstmate" (fm_backend_tmux_container_ensure, fm_backend_herdr_workspace_label)
+# and zellij's/cmux's shared-namespace anti-collision tag still prefixes every
+# NEW tab/workspace title with "fm-<hometag>-" (fm_backend_zellij_scoped_title,
+# fm_backend_cmux_scoped_title) - neither of those is a "generic fm- task
+# label" and neither changes here. A task spawned before this change keeps its
+# live "fm-<id>" window/tab name untouched (never renamed); every label-aware
+# matcher below and in the backend adapters still accepts that legacy form.
+W="$ID"
 case "$BACKEND" in
   tmux)
     SES=$(fm_backend_tmux_container_ensure)
     T="$SES:$W"
     # #134 robustness (tmux): fm_backend_tmux_create_task captures a stable window
     # id and pins the window name (automatic-rename/allow-rename off) so a captain's
-    # non-default tmux config cannot rename the window away from fm-<id> once
+    # non-default tmux config cannot rename the window away from its assigned $W once
     # treehouse cd's into the worktree. WT_TARGET carries that stable id for the
     # rename-critical worktree-detection steps below; the persisted window= handle
     # stays $T (the name form), which is safe now that rename is disabled.

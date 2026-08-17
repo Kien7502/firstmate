@@ -34,7 +34,8 @@ Verify setup by spawning a small task and confirming metadata contains `backend=
 ## Task shape and home isolation
 
 Every task receives one tab in the shared Zellij session.
-The caller-facing label remains `fm-<id>`, while the visible title is home-scoped as `fm-<home-label>-<id>`.
+The caller-facing label is the bare validated task id, with no generic `fm-` prefix (a task label from before this format changed was `fm-<id>`; that legacy form is still recognized).
+The visible title is home-scoped as `fm-<home-label>-<id>` either way - that `fm-` marks the shared anti-collision namespace tag, not the caller-facing task label, and does not change with this format.
 The home label is `firstmate` or `2ndmate-<id>` plus a short stable hash of the resolved Firstmate root.
 This prevents task-id collisions between a primary, secondmates, and separate Firstmate installations sharing one session.
 

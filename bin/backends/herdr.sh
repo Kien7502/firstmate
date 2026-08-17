@@ -42,9 +42,10 @@
 #
 # Authoritative task recovery/orphan discovery (ids may not deterministically match live state
 # after a server restart in a differently-configured session; see the
-# verification doc) uses LABEL matching (fm-<id> tab labels), never trusts a
-# stored pane id blindly: fm_backend_herdr_list_live. The presentation journal
-# is deliberately excluded from that path.
+# verification doc) uses LABEL matching (the bare task id, or a legacy
+# "fm-<id>" label for a pre-migration tab), never trusts a stored pane id
+# blindly: fm_backend_herdr_list_live. The presentation journal is
+# deliberately excluded from that path.
 #
 # Requires: herdr (CLI + socket), jq (JSON parsing). Bootstrap detects these
 # through fm_backend_required_tools only when herdr is the resolved backend;
@@ -322,9 +323,14 @@ fm_backend_herdr_projection_journal_snapshot() {  # <journal> <task-id>
     && [ -n "$FM_BACKEND_HERDR_JOURNAL_WORKSPACE_LABEL" ] \
     && [ -n "$FM_BACKEND_HERDR_JOURNAL_TASK_LABEL" ] || return 1
   expected_label=$(fm_backend_herdr_projection_workspace_label "$id" "$FM_BACKEND_HERDR_JOURNAL_PROJECTION_ID")
-  expected_task_label="fm-$id"
+  # A journal written by a pre-migration spawn recorded the legacy "fm-<id>"
+  # task label; accept either form here so an in-flight presentation attempt
+  # straddling this label-format change still validates instead of failing
+  # closed to a flat (non-presentation) recovery for no reason.
+  expected_task_label="$id"
   [ "$FM_BACKEND_HERDR_JOURNAL_WORKSPACE_LABEL" = "$expected_label" ] \
-    && [ "$FM_BACKEND_HERDR_JOURNAL_TASK_LABEL" = "$expected_task_label" ]
+    && { [ "$FM_BACKEND_HERDR_JOURNAL_TASK_LABEL" = "$expected_task_label" ] \
+      || [ "$FM_BACKEND_HERDR_JOURNAL_TASK_LABEL" = "fm-$expected_task_label" ]; }
 }
 
 # fm_backend_herdr_projection_journal_token: validate and read either journal
@@ -399,8 +405,9 @@ fm_backend_herdr_projection_journal_replace_endpoint() {  # <journal> <task-id> 
 
 # fm_backend_herdr_projection_concise_task_label: strip redundant owner
 # prefixes from a task id used only in the presentation workspace label.
-# Removes firstmate/, 2ndmate-<id>/, and a presentation-level fm- owner
-# prefix when present. The ordinary task tab remains fm-<id> and is not
+# Removes firstmate/, 2ndmate-<id>/, and a legacy "fm-" owner prefix when
+# present (a pre-migration task id could carry one; a current validated task
+# id never does). The ordinary task tab uses the bare task id and is not
 # built by this helper.
 fm_backend_herdr_projection_concise_task_label() {  # <task-id>
   local task=$1
@@ -1098,8 +1105,8 @@ fm_backend_herdr_agent_alive() {  # <target>
 #
 # A same-labeled tab already existing no longer means an automatic refusal:
 # herdr persists and restores its whole session layout (workspaces/tabs/
-# panes) across a server restart, including a reboot, and a restored fm-<id>
-# task tab comes back a HUSK - a dead pane, or (today, and unconditionally
+# panes) across a server restart, including a reboot, and a restored task
+# tab comes back a HUSK - a dead pane, or (today, and unconditionally
 # once a future `resume_agents_on_restore = false` config ships) a plain
 # agent-less shell sitting in the saved cwd, never the crewmate that used to
 # be there. Before this fix, every fleet respawn after such a restart needed
@@ -1192,8 +1199,8 @@ EOF
 }
 
 # fm_backend_herdr_projection_create_task: create one disposable presentation
-# workspace and its normal fm-<id> task tab without looking up, adopting, or
-# reusing any existing workspace.
+# workspace and its normal task tab (the bare task id) without looking up,
+# adopting, or reusing any existing workspace.
 # The caller must atomically publish the projection journal first.
 # This function sets exact response-derived globals and prints nothing:
 #   FM_BACKEND_HERDR_PROJECTION_SESSION
@@ -2262,16 +2269,22 @@ EOF
 }
 
 # fm_backend_herdr_list_live: recovery/orphan discovery. Lists every tab whose
-# label looks like a firstmate task window (fm-<id>) in <session>'s, THIS
-# HOME'S OWN workspace (fm_backend_herdr_workspace_label - never another
-# home's), by LABEL - never by trusting a stored pane id, since ids are not
-# guaranteed stable across every server lifecycle (see herdr-verification-p2.md
-# "ID stability"). A caller running as a given home (e.g. a secondmate
-# recovering its own in-flight work) naturally scopes to that home's own
-# workspace because FM_HOME already names it - no glue needed, unlike the
-# primary-spawns-a-secondmate path in fm-spawn.sh. Read-only: a session/
-# workspace that does not exist yet simply lists nothing. One
-# "<session>:<pane_id>\t<label>" line per live task tab.
+# label looks like a firstmate task window in <session>'s, THIS HOME'S OWN
+# workspace (fm_backend_herdr_workspace_label - never another home's), by
+# LABEL - never by trusting a stored pane id, since ids are not guaranteed
+# stable across every server lifecycle (see herdr-verification-p2.md "ID
+# stability"). A NEW task tab carries the bare validated task id as its
+# label (fm-spawn.sh's W="$ID"); a pre-migration tab still carries the legacy
+# "fm-<id>" label. The task-id-shaped match mirrors fm_task_id_path_safe's
+# charset (bin/fm-pr-lib.sh: [A-Za-z0-9._-], not leading with a dot, <=64
+# chars) so an unrelated tab a captain added by hand to this workspace - one
+# whose label does not look like a validated task id, such as free text with
+# spaces - is not swept in as a false positive. A caller running as a given
+# home (e.g. a secondmate recovering its own in-flight work) naturally scopes
+# to that home's own workspace because FM_HOME already names it - no glue
+# needed, unlike the primary-spawns-a-secondmate path in fm-spawn.sh.
+# Read-only: a session/workspace that does not exist yet simply lists
+# nothing. One "<session>:<pane_id>\t<label>" line per live task tab.
 fm_backend_herdr_list_live() {  # <session>
   local session=$1 wsid tabs tab_id label pane_id
   wsid=$(fm_backend_herdr_workspace_find "$session") || return 0
@@ -2282,7 +2295,9 @@ fm_backend_herdr_list_live() {  # <session>
     pane_id=$(fm_backend_herdr_pane_for_tab "$session" "$wsid" "$tab_id") || continue
     [ -n "$pane_id" ] || continue
     printf '%s:%s\t%s\n' "$session" "$pane_id" "$label"
-  done < <(printf '%s' "$tabs" | jq -r '.result.tabs[]? | select(.label | startswith("fm-")) | "\(.tab_id)\t\(.label)"' 2>/dev/null)
+  done < <(printf '%s' "$tabs" | jq -r \
+    '.result.tabs[]? | select(.label | startswith("fm-") or test("^[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}$")) | "\(.tab_id)\t\(.label)"' \
+    2>/dev/null)
 }
 
 # --- native event push: pane.agent_status_changed subscriber -----------------

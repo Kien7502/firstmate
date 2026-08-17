@@ -283,6 +283,25 @@ test_expected_label_accepts_unambiguous_untagged_legacy_tab() {
   pass "fm_backend_zellij_tab_matches_label: accepts an untagged legacy fm-<id> title when it is the only live tab carrying it"
 }
 
+test_expected_label_accepts_legacy_tab_by_bare_current_label() {
+  local dir fb
+  dir="$TMP_ROOT/label-legacy-by-bare"; mkdir -p "$dir/responses"
+  zellij_pane_response "$dir" 1 7 3
+  # 2: list-tabs --json -> one live tab still carrying the pre-migration
+  # untagged "fm-<id>" title, unambiguous. The CALLER now passes the current
+  # bare task id (fm_backend_expected_label_of_selector's new format), not
+  # the old "fm-<id>" form - this must still match the legacy live title.
+  zellij_tab_response "$dir" 2 3 fm-legacy
+  fb=$(make_zellij_fakebin "$dir")
+  PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
+    FM_ZELLIJ_SESSION_LIST="firstmate" \
+    bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_send_key firstmate:7 Escape legacy' "$ROOT"
+  expect_code 0 $? "send_key should reach a pre-migration fm-<id> tab when the caller now passes the bare current-format label"
+  assert_contains "$(cat "$dir/log")" $'\x1f''send-keys'$'\x1f''--pane-id'$'\x1f''7'$'\x1f''Esc' \
+    "send_key did not send after accepting the legacy title via the bare current label"
+  pass "fm_backend_zellij_tab_matches_label: a bare current-format label still matches a live untagged legacy fm-<id> title"
+}
+
 test_expected_label_refuses_ambiguous_untagged_tab() {
   local dir fb status
   dir="$TMP_ROOT/label-ambiguous-untagged"; mkdir -p "$dir/responses"
@@ -323,8 +342,8 @@ test_list_live_scopes_to_own_home_tag() {
   out=$( PATH="$fb:$PATH" FM_ZELLIJ_LOG="$dir/log" FM_ZELLIJ_RESPONSES="$dir/responses" \
     FM_ZELLIJ_SESSION_LIST="firstmate" \
     bash -c '. "$0/bin/backends/zellij.sh"; fm_backend_zellij_list_live firstmate' "$ROOT" )
-  [ "$out" = $'firstmate:7\tfm-task1' ] \
-    || fail "list_live should list only this home's own tagged tab with its plain fm-<id> label, got '$out'"
+  [ "$out" = $'firstmate:7\ttask1' ] \
+    || fail "list_live should list only this home's own tagged tab with its plain bare-id label, got '$out'"
   pass "fm_backend_zellij_list_live: scopes to this home's own tag - excludes a different installation's tagged tab and unrelated tabs"
 }
 
@@ -1025,6 +1044,7 @@ test_scoped_title_uses_primary_home_label
 test_scoped_title_uses_secondmate_home_label
 test_scoped_title_changes_with_root_path
 test_expected_label_accepts_unambiguous_untagged_legacy_tab
+test_expected_label_accepts_legacy_tab_by_bare_current_label
 test_expected_label_refuses_ambiguous_untagged_tab
 test_list_live_scopes_to_own_home_tag
 test_resolve_bare_selector_prefers_scoped_title

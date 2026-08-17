@@ -993,7 +993,7 @@ fm_pending_reply_tick() {  # <state-dir>
       sm_home=$(fm_meta_get "$meta" home)
       harness=$(fm_meta_get "$meta" harness)
       if [ -n "$target" ]; then
-        label="fm-$task_id"
+        label="$task_id"
         observation=
         found=0
         for ((i = 0; i < ${#observation_tasks[@]}; i++)); do

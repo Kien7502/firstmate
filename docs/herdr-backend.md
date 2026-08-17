@@ -66,7 +66,7 @@ Firstmate atomically publishes a three-field version 1 journal containing a rand
 After the new workspace converges to one exact task endpoint beneath one exact parent, the journal advances to a version 2 binding that records the physical home, named session, endpoint, parent, and immutable expected labels.
 The token is visible in the workspace title because Herdr exposes no verified hidden persistent field, but neither token, title, nor journal authorizes send, capture, task ownership, Treehouse return, or general recovery.
 
-The normal `fm-<id>` task tab is created in the exact new workspace returned by Herdr.
+The normal task tab, labeled with the bare validated task id (a task tab from before this format changed was labeled `fm-<id>`; that legacy form is still recognized), is created in the exact new workspace returned by Herdr.
 Only the exact seeded default tab returned by the same workspace-create response can be pruned.
 Before and after create, prune, order, abort cleanup, and normal cleanup, Firstmate verifies exact workspace, tab, pane, and active-focus ids.
 An ambiguous response grants no mutation or cleanup authority.

@@ -237,7 +237,11 @@ spawned=${FM_FAKE_TMUX_SPAWNED:?}
 killed=${spawned}.killed
 mate_home=${FM_FAKE_SECOND_MATE_HOME:?}
 mate_id=${FM_FAKE_SECOND_MATE_ID:?}
-mate_window="fm-$mate_id"
+# The pre-existing window (never touched this run) still carries the
+# fixture's legacy "fm-<id>" meta window= value; a window this run actually
+# (re)creates via the real spawn path carries the current bare-id format.
+legacy_mate_window="fm-$mate_id"
+new_mate_window="$mate_id"
 case "${1:-}" in
   display-message)
     target=
@@ -284,9 +288,9 @@ case "${1:-}" in
       exit 1
     fi
     if [ -e "$spawned" ]; then
-      printf '%s\n' "$mate_window"
+      printf '%s\n' "$new_mate_window"
     elif [ ! -e "$killed" ] && { [ "$mode" = ambiguous ] || [ "$mode" = shell ]; }; then
-      printf '%s\n' "$mate_window"
+      printf '%s\n' "$legacy_mate_window"
     else
       printf '%s\n' main
     fi
@@ -331,11 +335,11 @@ case "${1:-} ${2:-}" in
     ;;
   "tab list")
     if [ -e "$spawned" ]; then
-      printf '{"result":{"tabs":[{"tab_id":"t-new","workspace_id":"ws1","label":"fm-%s"}]}}\n' "$mate_id"
+      printf '{"result":{"tabs":[{"tab_id":"t-new","workspace_id":"ws1","label":"%s"}]}}\n' "$mate_id"
     elif [ -e "$killed" ]; then
       printf '%s\n' '{"result":{"tabs":[]}}'
     else
-      printf '{"result":{"tabs":[{"tab_id":"t-old","workspace_id":"ws1","label":"fm-%s"}]}}\n' "$mate_id"
+      printf '{"result":{"tabs":[{"tab_id":"t-old","workspace_id":"ws1","label":"%s"}]}}\n' "$mate_id"
     fi
     ;;
   "tab create")
@@ -907,7 +911,7 @@ EOF
   assert_not_contains "$out" "SECONDMATE_LIVENESS:" "successful missing-window recovery should stay non-actionable"
   assert_contains "$(cat "$log")" "new-window" "session start did not relaunch the missing Pi secondmate"
   assert_not_contains "$(cat "$log")" "kill-window" "session start tried to kill an already-absent window"
-  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:fm-$SESSION_START_SECOND_MATE_ID)" \
+  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:$SESSION_START_SECOND_MATE_ID)" \
     "the later fleet read did not confirm the relaunched window"
   assert_grep 'harness=pi' "$home/state/$SESSION_START_SECOND_MATE_ID.meta" \
     "the real respawn path did not preserve the Pi harness: $(cat "$home/state/$SESSION_START_SECOND_MATE_ID.meta")"
@@ -968,7 +972,7 @@ EOF
   assert_contains "$(cat "$log")" "kill-window -t firstmate:fm-$SESSION_START_SECOND_MATE_ID" \
     "the proven bare-shell path did not remove its existing dead endpoint"
   assert_contains "$(cat "$log")" "new-window" "the proven bare-shell path did not relaunch"
-  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:fm-$SESSION_START_SECOND_MATE_ID)" \
+  assert_contains "$out" "endpoint: alive (backend=tmux window=firstmate:$SESSION_START_SECOND_MATE_ID)" \
     "the later fleet read did not confirm the bare-shell relaunch"
   pass "session start: the proven bare-shell recovery path remains intact"
 }

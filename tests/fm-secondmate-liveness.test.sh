@@ -276,14 +276,30 @@ case "${1:-}" in
     case "$mode" in
       missing) printf '%s\n' main; exit 0 ;;
       unreadable) exit 1 ;;
-      *) [ -e "${FM_TMUX_CALL_LOG:?}.killed" ] || printf '%s\n' fm-sm1; exit 0 ;;
+      *)
+        if [ -e "${FM_TMUX_CALL_LOG:?}.killed" ]; then
+          exit 0
+        fi
+        # A window this run actually (re)created via new-window carries the
+        # current bare-id label; the untouched pre-existing window still
+        # carries the fixture's legacy "fm-<id>" meta window= value.
+        if [ -e "${FM_TMUX_CALL_LOG}.respawned" ]; then
+          printf '%s\n' sm1
+        else
+          printf '%s\n' fm-sm1
+        fi
+        exit 0
+        ;;
     esac
     ;;
   new-window|kill-window)
     printf '%s\n' "$*" >> "${FM_TMUX_CALL_LOG:?}"
     [ "${1:-}" = kill-window ] && : > "${FM_TMUX_CALL_LOG}.killed"
     [ "${FM_TEST_FAIL_NEW_WINDOW:-0}" = 1 ] && [ "${1:-}" = new-window ] && exit 1
-    [ "${1:-}" = new-window ] && rm -f "${FM_TMUX_CALL_LOG}.killed"
+    if [ "${1:-}" = new-window ]; then
+      rm -f "${FM_TMUX_CALL_LOG}.killed"
+      : > "${FM_TMUX_CALL_LOG}.respawned"
+    fi
     exit 0
     ;;
   has-session) exit 0 ;;

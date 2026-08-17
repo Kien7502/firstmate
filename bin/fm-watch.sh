@@ -219,7 +219,7 @@ window_harness() {
 window_label() {
   local w=$1 task
   task=$(window_to_task "$w" "$STATE")
-  [ -n "$task" ] && printf 'fm-%s' "$task"
+  [ -n "$task" ] && printf '%s' "$task"
 }
 
 recorded_windows() {

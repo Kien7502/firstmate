@@ -462,7 +462,7 @@ test_spawn_preserves_orca_metadata_when_pathless_worktree_cleanup_fails() {
   assert_contains "$(cat "$LOG")" $'orca\x1f''worktree'$'\x1f''rm'$'\x1f''--worktree'$'\x1f''id:wt-pathless-cleanup'$'\x1f''--force'$'\x1f''--json' \
     "pathless cleanup should attempt helper-backed worktree removal"
   assert_present "$state/$id.meta" "failed pathless cleanup should preserve metadata"
-  assert_grep "window=fm-$id" "$state/$id.meta" "preserved pathless metadata missing stable window alias"
+  assert_grep "window=$id" "$state/$id.meta" "preserved pathless metadata missing stable window alias"
   assert_grep "backend=orca" "$state/$id.meta" "preserved pathless metadata missing backend=orca"
   assert_grep "orca_worktree_id=wt-pathless-cleanup" "$state/$id.meta" "preserved pathless metadata missing Orca worktree id"
   assert_no_grep "terminal=" "$state/$id.meta" "preserved pathless metadata should not invent a terminal handle"
@@ -491,10 +491,10 @@ test_spawn_writes_orca_metadata_and_launches_harness() {
     FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 \
     "$ROOT/bin/fm-spawn.sh" "$id" "$proj" claude --backend orca 2>&1 )
   expect_code 0 $? "fm-spawn.sh --backend orca should succeed with fake Orca"$'\n'"$out"
-  assert_contains "$out" "spawned $id harness=claude kind=ship mode=no-mistakes yolo=off window=fm-$id worktree=$wt" \
+  assert_contains "$out" "spawned $id harness=claude kind=ship mode=no-mistakes yolo=off window=$id worktree=$wt" \
     "spawn output missing Orca window/worktree summary"
   assert_grep "backend=orca" "$state/$id.meta" "meta missing backend=orca"
-  assert_grep "window=fm-$id" "$state/$id.meta" "meta missing stable Orca window alias"
+  assert_grep "window=$id" "$state/$id.meta" "meta missing stable Orca window alias"
   assert_grep "terminal=term-spawn" "$state/$id.meta" "meta missing terminal handle"
   assert_grep "orca_worktree_id=wt-spawn" "$state/$id.meta" "meta missing Orca worktree id"
   assert_grep "worktree=$wt" "$state/$id.meta" "meta missing Orca worktree path"
@@ -621,7 +621,7 @@ test_spawn_removes_orca_worktree_when_terminal_create_fails() {
   status=$?
   [ "$status" -ne 0 ] || fail "Orca spawn should fail when terminal creation fails"
   assert_absent "$state/$id.meta" "terminal-create abort should not record metadata after successful cleanup"
-  assert_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''create'$'\x1f''--worktree'$'\x1f''id:wt-terminal-fail'$'\x1f''--title'$'\x1f'"fm-$id"$'\x1f''--json' \
+  assert_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''create'$'\x1f''--worktree'$'\x1f''id:wt-terminal-fail'$'\x1f''--title'$'\x1f'"$id"$'\x1f''--json' \
     "Orca spawn should attempt terminal creation before abort cleanup"
   assert_contains "$(cat "$LOG")" $'orca\x1f''worktree'$'\x1f''rm'$'\x1f''--worktree'$'\x1f''id:wt-terminal-fail'$'\x1f''--force'$'\x1f''--json' \
     "Orca spawn should remove the worktree when terminal creation fails"
@@ -657,7 +657,7 @@ test_spawn_preserves_orca_metadata_when_abort_cleanup_fails() {
   assert_contains "$(cat "$LOG")" $'orca\x1f''worktree'$'\x1f''rm'$'\x1f''--worktree'$'\x1f''id:wt-cleanup-fail'$'\x1f''--force'$'\x1f''--json' \
     "Orca spawn should attempt helper cleanup before preserving metadata"
   assert_present "$state/$id.meta" "failed Orca abort cleanup should preserve metadata"
-  assert_grep "window=fm-$id" "$state/$id.meta" "preserved metadata missing stable window alias"
+  assert_grep "window=$id" "$state/$id.meta" "preserved metadata missing stable window alias"
   assert_grep "backend=orca" "$state/$id.meta" "preserved metadata missing backend=orca"
   assert_grep "orca_worktree_id=wt-cleanup-fail" "$state/$id.meta" "preserved metadata missing Orca worktree id"
   assert_no_grep "terminal=" "$state/$id.meta" "preserved metadata should not invent a terminal handle"
@@ -702,7 +702,7 @@ test_peek_send_and_crew_state_route_through_orca_meta() {
   fm_git_init_commit "$wt"
   state="$TMP_ROOT/io-state"; mkdir -p "$state"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-io" "worktree=$wt" "project=$wt" "harness=claude" "kind=scout" "backend=orca"
+    "window=$id" "terminal=term-io" "worktree=$wt" "project=$wt" "harness=claude" "kind=scout" "backend=orca"
   touch "$state/.last-watcher-beat"
   orca_case io-path
   neutral=$(neutral_fm_root "$CASE_DIR/neutral")
@@ -723,7 +723,7 @@ test_peek_send_and_crew_state_route_through_orca_meta() {
   assert_contains "$out" "state: unknown" "crew-state should fall back cleanly for an idle Orca scout"
   assert_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''read'$'\x1f''--terminal'$'\x1f''term-io' \
     "peek/crew-state did not read the recorded Orca terminal"
-  assert_not_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''read'$'\x1f''--terminal'$'\x1f'"fm-$id" \
+  assert_not_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''read'$'\x1f''--terminal'$'\x1f'"$id" \
     "crew-state should not read the stable Orca alias as a terminal handle"
   assert_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''send'$'\x1f''--terminal'$'\x1f''term-io'$'\x1f''--text'$'\x1f''hello orca'$'\x1f''--json' \
     "send did not type through the recorded Orca terminal"
@@ -739,7 +739,7 @@ test_peek_and_crew_state_fail_closed_on_orca_error_json() {
   fm_git_init_commit "$wt"
   state="$TMP_ROOT/read-error-state"; mkdir -p "$state"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-stale" "worktree=$wt" "project=$wt" "harness=claude" "kind=scout" "backend=orca"
+    "window=$id" "terminal=term-stale" "worktree=$wt" "project=$wt" "harness=claude" "kind=scout" "backend=orca"
   touch "$state/.last-watcher-beat"
   orca_case read-error-json
   neutral=$(neutral_fm_root "$CASE_DIR/neutral")
@@ -785,7 +785,7 @@ test_scout_teardown_removes_orca_worktree_via_helper() {
   printf 'report\n' > "$data/$id/report.md"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-teardown" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-teardown" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-teardown" \
     "decisions_reviewed=1" "decision_keys="
@@ -822,7 +822,7 @@ test_scout_teardown_refuses_orca_id_path_mismatch() {
   printf 'report\n' > "$data/$id/report.md"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-scout-mismatch" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-scout-mismatch" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-scout-mismatch" \
     "decisions_reviewed=1" "decision_keys="
@@ -858,7 +858,7 @@ test_teardown_removes_orca_worktree_when_path_missing() {
   printf 'report\n' > "$data/$id/report.md"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-missing-path" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-missing-path" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-missing-path" \
     "decisions_reviewed=1" "decision_keys="
@@ -891,7 +891,7 @@ test_teardown_preserves_metadata_when_orca_remove_error_json() {
   printf 'report\n' > "$data/$id/report.md"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "worktree=$wt" "project=$proj" \
+    "window=$id" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-remove-error" \
     "decisions_reviewed=1" "decision_keys="
@@ -921,7 +921,7 @@ test_scout_teardown_refuses_orca_missing_report_when_path_missing() {
   mkdir -p "$data/$id" "$state" "$config"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-missing-report" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-missing-report" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-missing-report"
   orca_case missing-report
@@ -951,7 +951,7 @@ test_ship_teardown_refuses_orca_missing_worktree_path() {
   mkdir -p "$data/$id" "$state" "$config"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-missing-ship" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-missing-ship" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-missing-ship"
   orca_case missing-ship-path
@@ -982,7 +982,7 @@ test_ship_teardown_removes_orca_worktree_when_id_path_matches() {
   mkdir -p "$data/$id" "$state" "$config"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-ship-match" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-ship-match" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=ship" "mode=local-only" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-ship-match"
   orca_case ship-match
@@ -1017,7 +1017,7 @@ test_ship_teardown_refuses_orca_unresolvable_worktree_id() {
   mkdir -p "$data/$id" "$state" "$config"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-ship-unresolved" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-ship-unresolved" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=ship" "mode=local-only" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-ship-unresolved"
   orca_case ship-unresolved
@@ -1056,7 +1056,7 @@ test_ship_teardown_refuses_orca_id_path_mismatch() {
   mkdir -p "$data/$id" "$state" "$config"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-ship-mismatch" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-ship-mismatch" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=ship" "mode=local-only" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-ship-mismatch"
   orca_case ship-mismatch
@@ -1094,7 +1094,7 @@ test_teardown_refuses_orca_missing_worktree_id() {
   printf 'report\n' > "$data/$id/report.md"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "terminal=term-missing-id" "worktree=$wt" "project=$proj" \
+    "window=$id" "terminal=term-missing-id" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" "backend=orca" \
     "decisions_reviewed=1" "decision_keys="
   orca_case missing-id
@@ -1125,7 +1125,7 @@ test_teardown_removes_orca_worktree_without_terminal_handle() {
   printf 'report\n' > "$data/$id/report.md"
   touch "$state/.last-watcher-beat"
   fm_write_meta "$state/$id.meta" \
-    "window=fm-$id" "worktree=$wt" "project=$proj" \
+    "window=$id" "worktree=$wt" "project=$proj" \
     "harness=claude" "kind=scout" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-no-terminal" \
     "decisions_reviewed=1" "decision_keys="
@@ -1158,13 +1158,13 @@ test_secondmate_force_teardown_removes_orca_child_via_orca() {
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   fm_git_worktree "$childproj" "$childwt" "fm/$child_id"
   fm_write_meta "$home/state/domain.meta" \
-    "window=firstmate:fm-domain" "worktree=$subhome" "project=$subhome" \
+    "window=firstmate:domain" "worktree=$subhome" "project=$subhome" \
     "harness=echo" "kind=secondmate" "mode=secondmate" "yolo=off" \
     "home=$subhome" "projects=alpha"
   printf '%s\n' "- domain - Orca child cleanup (home: $subhome; scope: orca cleanup; projects: alpha; added 2026-07-03)" \
     > "$home/data/secondmates.md"
   fm_write_meta "$subhome/state/$child_id.meta" \
-    "window=fm-$child_id" "terminal=term-child-cleanup" "worktree=$childwt" "project=$childproj" \
+    "window=$child_id" "terminal=term-child-cleanup" "worktree=$childwt" "project=$childproj" \
     "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-child-cleanup"
   orca_case secondmate-child-cleanup
@@ -1181,7 +1181,7 @@ test_secondmate_force_teardown_removes_orca_child_via_orca() {
     "child cleanup did not close the recorded Orca terminal"
   assert_contains "$(cat "$LOG")" $'orca\x1f''worktree'$'\x1f''rm'$'\x1f''--worktree'$'\x1f''id:wt-child-cleanup'$'\x1f''--force'$'\x1f''--json' \
     "child cleanup did not remove the Orca worktree through orca worktree rm"
-  assert_not_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''close'$'\x1f''--terminal'$'\x1f'"fm-$child_id" \
+  assert_not_contains "$(cat "$LOG")" $'orca\x1f''terminal'$'\x1f''close'$'\x1f''--terminal'$'\x1f'"$child_id" \
     "child cleanup closed the stable alias instead of the Orca terminal"
   assert_absent "$home/state/domain.meta" "parent metadata should be removed after forced teardown"
   pass "fm-teardown.sh --force: removes Orca secondmate children through Orca"
@@ -1200,13 +1200,13 @@ test_secondmate_force_teardown_refuses_orca_child_id_path_mismatch() {
   fm_git_worktree "$childproj" "$childwt" "fm/$child_id"
   git -C "$childproj" worktree add --quiet -b "fm/$child_id-other" "$other_wt"
   fm_write_meta "$home/state/domain.meta" \
-    "window=firstmate:fm-domain" "worktree=$subhome" "project=$subhome" \
+    "window=firstmate:domain" "worktree=$subhome" "project=$subhome" \
     "harness=echo" "kind=secondmate" "mode=secondmate" "yolo=off" \
     "home=$subhome" "projects=alpha"
   printf '%s\n' "- domain - Orca child cleanup (home: $subhome; scope: orca cleanup; projects: alpha; added 2026-07-03)" \
     > "$home/data/secondmates.md"
   fm_write_meta "$subhome/state/$child_id.meta" \
-    "window=fm-$child_id" "terminal=term-child-mismatch" "worktree=$childwt" "project=$childproj" \
+    "window=$child_id" "terminal=term-child-mismatch" "worktree=$childwt" "project=$childproj" \
     "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-child-mismatch"
   orca_case secondmate-child-mismatch
@@ -1240,13 +1240,13 @@ test_secondmate_force_teardown_removes_partial_orca_child() {
   printf 'domain\n' > "$subhome/.fm-secondmate-home"
   fm_git_worktree "$childproj" "$childwt" "fm/$child_id"
   fm_write_meta "$home/state/domain.meta" \
-    "window=firstmate:fm-domain" "worktree=$subhome" "project=$subhome" \
+    "window=firstmate:domain" "worktree=$subhome" "project=$subhome" \
     "harness=echo" "kind=secondmate" "mode=secondmate" "yolo=off" \
     "home=$subhome" "projects=alpha"
   printf '%s\n' "- domain - Orca partial child cleanup (home: $subhome; scope: orca cleanup; projects: alpha; added 2026-07-03)" \
     > "$home/data/secondmates.md"
   fm_write_meta "$subhome/state/$child_id.meta" \
-    "window=fm-$child_id" "worktree=$childwt" "project=$childproj" \
+    "window=$child_id" "worktree=$childwt" "project=$childproj" \
     "harness=claude" "kind=ship" "mode=no-mistakes" "yolo=off" \
     "backend=orca" "orca_worktree_id=wt-partial-child"
   orca_case secondmate-partial-child-cleanup
