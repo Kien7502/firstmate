@@ -48,12 +48,16 @@ The earlier `sendUserMessage` counterfactual raced the positional prompt; the cu
 The installed pi-signed 0.82.0 wrapper repeated the Pi primary extension and session-start path on 2026-07-27.
 [`runtime-backends.md`](runtime-backends.md#tmux) owns the shared-ancestry evidence and authoritative selection-marker boundary.
 
+`bin/fm-pi-launch.sh` (the canonical primary launch/restart entry point) was verified on 2026-08-18 with Pi 0.84.2: an explicit `-e` extension path loads unconditionally in a directory never present in `~/.pi/agent/trust.json` (the trust-free fallback), the same explicit `-e` path does not double-load or error when that directory is also `--approve`-trusted (so ordinary discovery would find the same resolved file), and `--continue` correctly resumes a prior turn's stored fact while remaining scoped to the launcher's own resolved repo root regardless of the caller's shell cwd.
+
 Current deterministic and live entry points:
 
 ```sh
 tests/fm-sessionstart-nudge.test.sh
 tests/fm-captain-translation-contract.test.sh
+tests/fm-pi-launch.test.sh
 FM_PI_LIVE_E2E=1 tests/fm-pi-primary-live-e2e.test.sh
+FM_PI_LIVE_E2E=1 tests/fm-pi-launch-live-e2e.test.sh
 FM_OPENCODE_LIVE_E2E=1 tests/fm-opencode-primary-live-e2e.test.sh
 ```
 
