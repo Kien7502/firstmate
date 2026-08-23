@@ -91,8 +91,9 @@ test_tracked_extension_present_and_self_hashing() {
   assert_contains "$text" "exec \\\"\$FM_WATCH_ARM_SCRIPT\\\" --restart" "tracked extension does not restart into a Pi-owned watcher child"
   assert_contains "$text" 'label: "Arm firstmate watcher"' "tracked extension tool is missing its human-readable label"
   assert_not_contains "$text" "Always use this tool" "tracked extension kept broad tool-selection guidance"
-  assert_contains "$text" "only for the first required cycle or after a notification says the cycle is missing, failed, or unhealthy" "tracked extension tool metadata is missing the Pi first-cycle or explicit-repair rule"
-  assert_contains "$text" "Do not call it after ordinary work, turn completion, or ordinary signal, stale, check, or heartbeat handling" "tracked extension prompt guidance does not prevent redundant ordinary-notification calls"
+  assert_contains "$text" "only for the first required cycle before any session lock exists, or after a notification says the cycle is missing, failed, or unhealthy" "tracked extension tool metadata is missing the Pi first-cycle or explicit-repair rule"
+  assert_contains "$text" "Do not call it after ordinary work, turn completion, a session replacement (/new, /resume, /fork, reload), or ordinary signal, stale, check, or heartbeat handling" "tracked extension prompt guidance does not prevent redundant ordinary-notification or session-replacement calls"
+  assert_contains "$text" $'activateGeneration(generation);\n    markLoaded();\n    startArm(generation);' "tracked extension session_start handler does not automatically arm the activated generation"
   assert_contains "$text" 'parameters: Type.Object({})' "tracked extension tool is not using Pi's canonical TypeBox schema"
   assert_contains "$text" 'content: [{ type: "text", text: result.message }]' "tracked extension tool is missing Pi text content"
   assert_contains "$text" 'details: result' "tracked extension tool is missing structured result details"
@@ -229,7 +230,7 @@ if (tool.parameters?.type !== "object") throw new Error("tool parameters are not
 const metadata = [tool.description, tool.promptSnippet, ...(tool.promptGuidelines ?? [])].join("\n");
 if (metadata.includes("Always use this tool")) throw new Error(`broad tool-selection metadata remained visible: ${metadata}`);
 if (!tool.description.includes("first required Pi watcher cycle")) throw new Error(`tool description omitted the first-cycle condition: ${tool.description}`);
-if (!tool.promptSnippet.includes("ordinary re-arming is automatic")) throw new Error(`tool snippet omitted automatic continuation: ${tool.promptSnippet}`);
+if (!tool.promptSnippet.includes("ordinary re-arming, including session replacement, is automatic")) throw new Error(`tool snippet omitted automatic continuation: ${tool.promptSnippet}`);
 if (!tool.promptGuidelines.some((guideline) => guideline.includes("ordinary signal, stale, check, or heartbeat handling"))) {
   throw new Error(`tool guidelines omitted ordinary-notification prevention: ${tool.promptGuidelines}`);
 }
@@ -1008,25 +1009,41 @@ function liveArmPids() {
     .filter(pidAlive);
 }
 
+function currentChild() {
+  return existsSync(process.env.FM_CHILD_PID_FILE)
+    ? readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim()
+    : "";
+}
+
+// A redundant explicit call must stay an ownership-based no-op after automatic
+// arming, proving the recovery tool never becomes a second, competing mechanism.
+async function assertOwnershipNoop(instance, label) {
+  const before = currentChild();
+  const result = await instance.getTool().execute(label, {}, undefined, undefined, {});
+  if (!result.details?.ok || !String(result.details.message).includes("unchanged")) {
+    throw new Error(`${label} explicit call after automatic arm was not an ownership-based no-op: ${JSON.stringify(result.details)}`);
+  }
+  if (currentChild() !== before || liveArmPids().length !== 1) {
+    throw new Error(`${label} explicit call after automatic arm mutated the live arm set: ${liveArmPids().join(",")}`);
+  }
+}
+
 writeFileSync(`${process.env.FM_HOME}/state/.lock`, `${process.pid}\n`);
 const mod = await import(pathToFileURL(process.env.PLUGIN).href);
 
+// Session start must arm the first cycle itself, with no explicit fm_watch_arm_pi call.
 const startup = makePi();
 mod.default(startup.pi);
 await startup.handlers.get("session_start")?.({ type: "session_start", reason: "startup" }, {});
-const first = await startup.getTool().execute("startup", {}, undefined, undefined, {});
-if (!first.details?.ok || !String(first.details.message).includes("started Pi extension arm child")) {
-  throw new Error(`startup arm failed: ${JSON.stringify(first.details)}`);
-}
-await waitFor(() => existsSync(process.env.FM_CHILD_PID_FILE), "startup child");
-const startupChild = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
+await waitFor(() => existsSync(process.env.FM_CHILD_PID_FILE), "startup automatic child");
+const startupChild = currentChild();
 if (!pidAlive(startupChild)) throw new Error("startup child was not alive");
+if (liveArmPids().length !== 1) throw new Error(`startup expected exactly one live arm child, got ${liveArmPids().join(",")}`);
 const staleTool = startup.getTool();
+await assertOwnershipNoop(startup, "startup-explicit");
 
 async function replaceSession(previous, reason) {
-  const previousChild = existsSync(process.env.FM_CHILD_PID_FILE)
-    ? readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim()
-    : "";
+  const previousChild = currentChild();
   await previous.handlers.get("session_shutdown")?.({ type: "session_shutdown", reason }, {});
   if (previousChild) {
     await waitFor(() => !pidAlive(previousChild), `${reason} previous child exit`);
@@ -1038,49 +1055,41 @@ async function replaceSession(previous, reason) {
     reason,
     previousSessionFile: `/tmp/previous-${reason}.jsonl`,
   }, {});
-  const armed = await next.getTool().execute(`arm-${reason}`, {}, undefined, undefined, {});
-  if (!armed.details?.ok) {
-    throw new Error(`${reason} replacement arm failed: ${JSON.stringify(armed.details)}`);
-  }
-  if (String(armed.details.message).includes("shutting down")) {
-    throw new Error(`${reason} replacement still refused with shutting-down latch`);
-  }
+  // The replacement must arm its own first cycle automatically, with no tool call.
   await waitFor(() => {
-    if (!existsSync(process.env.FM_CHILD_PID_FILE)) return false;
-    const child = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
-    return child && child !== previousChild && pidAlive(child);
-  }, `${reason} replacement child`);
-  const live = liveArmPids();
-  if (live.length !== 1) {
-    throw new Error(`${reason} expected exactly one live arm child, got ${live.join(",") || "(none)"}`);
+    const child = currentChild();
+    return Boolean(child) && child !== previousChild && pidAlive(child);
+  }, `${reason} automatic replacement child`);
+  if (liveArmPids().length !== 1) {
+    throw new Error(`${reason} expected exactly one live arm child, got ${liveArmPids().join(",") || "(none)"}`);
   }
+  await assertOwnershipNoop(next, `redundant-${reason}`);
   return next;
 }
 
 let current = await replaceSession(startup, "new");
 current = await replaceSession(current, "resume");
 current = await replaceSession(current, "fork");
+current = await replaceSession(current, "reload");
 
-// Same bound instance: ordinary shutdown then session_start without a fresh factory.
-const sameInstanceChild = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
+// Same bound instance: ordinary shutdown then session_start without a fresh factory,
+// covering a runtime that reuses the extension binding across a replacement instead
+// of rebinding it.
+const sameInstanceChild = currentChild();
 await current.handlers.get("session_shutdown")?.({ type: "session_shutdown", reason: "new" }, {});
 await current.handlers.get("session_start")?.({ type: "session_start", reason: "new" }, {});
-const sameInstanceArm = await current.getTool().execute("same-instance", {}, undefined, undefined, {});
-if (!sameInstanceArm.details?.ok || String(sameInstanceArm.details.message).includes("shutting down")) {
-  throw new Error(`same-instance replacement arm failed: ${JSON.stringify(sameInstanceArm.details)}`);
-}
 await waitFor(() => {
-  if (!existsSync(process.env.FM_CHILD_PID_FILE)) return false;
-  const child = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
-  return child !== sameInstanceChild && pidAlive(child);
-}, "same-instance replacement child");
+  const child = currentChild();
+  return Boolean(child) && child !== sameInstanceChild && pidAlive(child);
+}, "same-instance automatic replacement child");
 await waitFor(() => !pidAlive(sameInstanceChild), "same-instance previous child exit");
 if (liveArmPids().length !== 1) {
   throw new Error(`same-instance expected one live arm child, got ${liveArmPids().join(",")}`);
 }
+await assertOwnershipNoop(current, "same-instance-explicit");
 
 // Stale prior-generation callback must not stop, rearm, or clear the active generation.
-const activeChild = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
+const activeChild = currentChild();
 const stale = await staleTool.execute("stale-prior-generation", {}, undefined, undefined, {});
 if (stale.details?.ok !== false || !String(stale.details.message).includes("shutting down")) {
   throw new Error(`stale prior generation did not refuse: ${JSON.stringify(stale.details)}`);
@@ -1090,10 +1099,8 @@ if (pidAlive(startupChild)) throw new Error("startup generation child was resurr
 if (liveArmPids().length !== 1 || liveArmPids()[0] !== activeChild) {
   throw new Error(`stale callback mutated live arm set: ${liveArmPids().join(",")}`);
 }
-const redundant = await current.getTool().execute("redundant", {}, undefined, undefined, {});
-if (!redundant.details?.ok || !String(redundant.details.message).includes("unchanged")) {
-  throw new Error(`active generation lost single-flight ownership: ${JSON.stringify(redundant.details)}`);
-}
+// The active generation's own tool must still be an ownership-based no-op afterward.
+await assertOwnershipNoop(current, "post-stale-callback");
 
 // Repeated transitions keep exactly one live cycle and never revive the refusal.
 for (const reason of ["resume", "fork", "new", "resume"]) {
@@ -1101,7 +1108,7 @@ for (const reason of ["resume", "fork", "new", "resume"]) {
 }
 
 // Real terminal shutdown still blocks late rearming.
-const finalChild = readFileSync(process.env.FM_CHILD_PID_FILE, "utf8").trim();
+const finalChild = currentChild();
 await current.handlers.get("session_shutdown")?.({ type: "session_shutdown", reason: "quit" }, {});
 await waitFor(() => !pidAlive(finalChild), "terminal shutdown child exit");
 const quitArm = await current.getTool().execute("after-quit", {}, undefined, undefined, {});
@@ -1114,9 +1121,9 @@ if (liveArmPids().length !== 0) {
 EOF
 )
   status=$?
-  expect_code 0 "$status" "Pi session transitions must rearm through an explicit generation owner"
+  expect_code 0 "$status" "Pi session transitions must automatically rearm through an explicit generation owner"
   [ -z "$out" ] || fail "Pi session-transition generation owner test printed output: $out"
-  pass "Pi session transitions use a generation owner across /new /resume /fork, stale callbacks, and quit"
+  pass "Pi session start and same-process replacement (/new /resume /fork reload) arm automatically with no tool call, stay a no-op recovery tool, and preserve stale-callback and quit refusals"
 }
 
 test_pi_process_exit_cleanup_listener_lifecycle() {
