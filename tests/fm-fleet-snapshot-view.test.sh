@@ -755,6 +755,67 @@ test_parked_scout_decision_stays_pending() {
   pass "a scout still parked at a decision stays pending (terminal clear does not over-fire)"
 }
 
+# Enough tasks that the serialized tasks array passes MAX_ARG_STRLEN (128 KiB),
+# the per-argument argv cap that any single --argjson value has to stay under.
+LARGE_FLEET_TASKS=100
+
+write_large_fleet_fixture() {  # <home> <count>
+  local home=$1 count=$2 i id
+  : > "$home/data/backlog.md"
+  printf '## In flight\n' >> "$home/data/backlog.md"
+  i=1
+  while [ "$i" -le "$count" ]; do
+    id=$(printf 'large-fleet-task-%03d' "$i")
+    mkdir -p "$home/projects/$id"
+    printf -- '- [ ] %s - Large fleet task %s (repo: repo-%s) (kind: ship) (since 2026-07-07)\n' \
+      "$id" "$i" "$i" >> "$home/data/backlog.md"
+    fm_write_meta "$home/state/$id.meta" \
+      "window=firstmate:fm-$id" \
+      "worktree=$home/projects/$id" \
+      "project=repo-$i" \
+      "harness=codex" \
+      "kind=ship" \
+      "mode=ship" \
+      "yolo=off" \
+      "pr=https://github.com/acme/repo-$i/pull/$i"
+    printf 'working: task %s under way\n' "$i" > "$home/state/$id.status"
+    i=$((i + 1))
+  done
+}
+
+# A fleet this size used to abort the snapshot with "Argument list too long"
+# because whole-fleet values reached jq through argv. Large values now travel
+# by file, so the inventory has to stay complete rather than shrink to fit.
+test_large_fleet_inventory_is_complete() {
+  local home fakebin out tasks_bytes
+  home=$(make_home large-fleet)
+  write_large_fleet_fixture "$home" "$LARGE_FLEET_TASKS"
+  fakebin=$(make_fakebin "$home")
+  out=$(PATH="$fakebin:$PATH" FM_HOME="$home" "$SNAPSHOT" --json) \
+    || fail "snapshot must survive a fleet whose tasks array exceeds the argv cap"
+
+  # Guard the fixture itself: if it ever stops crossing the cap the test would
+  # silently stop covering the regression.
+  tasks_bytes=$(printf '%s' "$out" | jq -c '[.tasks[] | del(.backlog)]' | LC_ALL=C wc -c | tr -d ' ')
+  [ "$tasks_bytes" -gt 131072 ] \
+    || fail "fixture no longer exceeds the 128 KiB argv cap (${tasks_bytes} bytes); raise LARGE_FLEET_TASKS"
+
+  printf '%s' "$out" | jq -e --argjson n "$LARGE_FLEET_TASKS" '
+    .schema == "fm-fleet-snapshot.v1"
+      and (.tasks | length) == $n
+      and (.backlog.records | length) == $n
+      and ([.tasks[] | select(.current_state.state == "working")] | length) == $n
+      and .main_inventory.valid == true
+      and (.main_inventory.orphan_in_flight | length) == 0
+  ' >/dev/null || fail "large fleet snapshot dropped entries or changed schema"
+
+  printf '%s' "$out" | jq -e --argjson n "$LARGE_FLEET_TASKS" '
+    (.tasks[-1].id == ("large-fleet-task-" + ($n | tostring)))
+      and .tasks[-1].pr.url == ("https://github.com/acme/repo-" + ($n | tostring) + "/pull/" + ($n | tostring))
+  ' >/dev/null || fail "large fleet snapshot lost the last task row"
+  pass "a fleet past the argv cap keeps every entry and the same schema"
+}
+
 test_empty_fleet_json
 test_fixture_snapshot_json
 test_main_inventory_orphan_and_unstructured_disclosure
@@ -768,5 +829,6 @@ test_completed_scout_report_is_pointer_not_pending
 test_parked_scout_decision_stays_pending
 test_scout_reports_include_teardown_reports
 test_backlog_tasks_axi_forms_and_overrides
+test_large_fleet_inventory_is_complete
 test_view_renders_snapshot
 test_view_renders_dead_secondmate_agent_status
