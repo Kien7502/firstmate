@@ -162,7 +162,9 @@ test_pi_snippet_uses_effective_extension_path() {
   watch="$ROOT/.pi/extensions/fm-primary-pi-watch.ts"
   mkdir -p "$home/state" "$home/config"
   out=$(FM_HOME="$home" "$RENDER" --harness pi)
-  assert_contains "$out" "-e $turnend -e $watch" "pi snippet did not render both effective extension launch paths"
+  assert_contains "$out" "$turnend" "pi snippet did not render the effective turn-end guard extension path"
+  assert_contains "$out" "$watch" "pi snippet did not render the effective watcher extension path"
+  assert_contains "$out" "bin/fm-pi-launch.sh --resume" "pi snippet did not point restart guidance at the canonical launcher"
   assert_contains "$out" "The turn-end guard extension lives at \`$turnend\`" "pi snippet did not render the turn-end guard extension path"
   assert_contains "$out" "The watcher extension lives at \`$watch\`" "pi snippet did not render the watcher extension path"
   assert_not_contains "$out" "__FM_PI_EXT__" "renderer leaked the Pi extension path placeholder"

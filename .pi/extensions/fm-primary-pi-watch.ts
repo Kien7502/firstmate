@@ -5,9 +5,13 @@
 // /fork, reload) as well as terminal quit. This extension binds one generation per
 // session activation. Only the active live generation may start, stop, rearm, or
 // clear the arm child. Replacement session_start (or a fresh factory bind) activates
-// a new live generation so monitoring can arm again without restarting Pi. Terminal
-// quit leaves the final generation stopped so late callbacks cannot rearm. Stale
-// callbacks from a prior generation are no-ops against the active replacement.
+// a new live generation and arms its first watcher cycle itself, without restarting
+// Pi or waiting on a model-issued fm_watch_arm_pi call. A session_start that fires
+// before any session lock exists (a genuinely cold launch) is a safe no-op through
+// the same ownership check, leaving the documented first-cycle tool call as the only
+// way to arm that case. Terminal quit leaves the final generation stopped so late
+// callbacks cannot rearm. Stale callbacks from a prior generation are no-ops against
+// the active replacement.
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -451,6 +455,7 @@ export default function (pi: ExtensionAPI) {
     if (generation.stopping) generation = createGeneration();
     activateGeneration(generation);
     markLoaded();
+    startArm(generation);
   });
   pi.on?.("session_shutdown", () => {
     stopGeneration(generation);
@@ -467,10 +472,10 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool?.({
     name: "fm_watch_arm_pi",
     label: "Arm firstmate watcher",
-    description: "Start the first required Pi watcher cycle, or repair one only after a notification says the cycle is missing, failed, or unhealthy. Do not call after ordinary work or ordinary notifications; the Pi extension re-arms automatically. Never run bin/fm-watch-arm.sh through bash.",
-    promptSnippet: "Start the first required Pi watcher cycle or repair a cycle reported missing, failed, or unhealthy; ordinary re-arming is automatic.",
+    description: "Start the first required Pi watcher cycle before any session lock exists, or repair one only after a notification says the cycle is missing, failed, or unhealthy. Do not call after ordinary work, ordinary notifications, or a session replacement (/new, /resume, /fork, reload); the Pi extension arms those automatically. Never run bin/fm-watch-arm.sh through bash.",
+    promptSnippet: "Start the first required Pi watcher cycle or repair a cycle reported missing, failed, or unhealthy; ordinary re-arming, including session replacement, is automatic.",
     promptGuidelines: [
-      "Call fm_watch_arm_pi only for the first required cycle or after a notification says the cycle is missing, failed, or unhealthy. Do not call it after ordinary work, turn completion, or ordinary signal, stale, check, or heartbeat handling because the Pi extension owns re-arming. Never run bin/fm-watch-arm.sh through bash.",
+      "Call fm_watch_arm_pi only for the first required cycle before any session lock exists, or after a notification says the cycle is missing, failed, or unhealthy. Do not call it after ordinary work, turn completion, a session replacement (/new, /resume, /fork, reload), or ordinary signal, stale, check, or heartbeat handling because the Pi extension owns re-arming. Never run bin/fm-watch-arm.sh through bash.",
     ],
     parameters: Type.Object({}),
     renderShell: "self",

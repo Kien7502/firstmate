@@ -532,20 +532,20 @@ test_resolve_selector_three_forms() {
     || fail "bare non-fm task id should resolve through exact metadata"
   [ "$(fm_backend_of_selector 'dotfiles-d6' 'default:wA:p2' "$state")" = herdr ] \
     || fail "bare non-fm task id should use its recorded backend"
-  [ "$(fm_backend_expected_label_of_selector 'dotfiles-d6' "$state")" = "fm-dotfiles-d6" ] \
-    || fail "bare non-fm task id should report the spawned fm-<id> label"
+  [ "$(fm_backend_expected_label_of_selector 'dotfiles-d6' "$state")" = "dotfiles-d6" ] \
+    || fail "bare non-fm task id should report its bare id as the spawned label"
 
   [ "$(fm_backend_resolve_selector 'fm-turnend-all-harnesses-v9' "$state")" = "default:wB:p3" ] \
     || fail "exact fm-* task id should resolve through its exact metadata"
   [ "$(fm_backend_of_selector 'fm-turnend-all-harnesses-v9' 'default:wB:p3' "$state")" = herdr ] \
     || fail "exact fm-* task id should use exact metadata without stripping fm-"
-  [ "$(fm_backend_expected_label_of_selector 'fm-turnend-all-harnesses-v9' "$state")" = "fm-fm-turnend-all-harnesses-v9" ] \
-    || fail "exact fm-* task id should report the spawned fm-<id> label"
+  [ "$(fm_backend_expected_label_of_selector 'fm-turnend-all-harnesses-v9' "$state")" = "fm-turnend-all-harnesses-v9" ] \
+    || fail "exact fm-* task id should report its own id as the spawned label, unprefixed further"
 
   [ "$(fm_backend_resolve_selector 'fm-task1' "$state")" = "firstmate:fm-task1" ] \
     || fail "legacy fm-<id> label should resolve through <id>.meta's window="
-  [ "$(fm_backend_expected_label_of_selector 'fm-task1' "$state")" = "fm-task1" ] \
-    || fail "legacy fm-<id> label should preserve its backend label"
+  [ "$(fm_backend_expected_label_of_selector 'fm-task1' "$state")" = "task1" ] \
+    || fail "legacy fm-<id> label should report the bare id as the current spawned label"
 
   out=$(fm_backend_resolve_selector 'fm-missing' "$state" 2>&1) && fail "fm-<id> with no meta should fail"
   assert_contains "$out" "no metadata for fm-missing" "missing-meta error text changed"
@@ -1032,6 +1032,39 @@ test_spawn_default_backend_writes_no_meta_field() {
   pass "fm-spawn.sh: an explicit --backend tmux resolves silently and writes no backend= (missing means tmux)"
 }
 
+# A newly spawned task's visible tmux window is named for the bare validated
+# task id directly, with no generic "fm-" prefix, while the durable per-home
+# tmux session "firstmate" (fm_backend_tmux_container_ensure) is a separate,
+# unrelated container name that this change never touches.
+test_spawn_tmux_window_uses_bare_task_id_label() {
+  local proj wt data id state config out fb
+  proj="$TMP_ROOT/label-project"; wt="$TMP_ROOT/label-wt"; data="$TMP_ROOT/label-data"
+  id="labeltestz9"
+  fm_git_worktree "$proj" "$wt" "fm/$id"
+  fb=$(make_spawn_fakebin "$TMP_ROOT/label-fake" "$wt")
+  mkdir -p "$data/$id"; printf 'brief\n' > "$data/$id/brief.md"
+  state="$TMP_ROOT/label-state"; config="$TMP_ROOT/label-config"
+  mkdir -p "$state" "$config"
+
+  out=$(PATH="$fb:$PATH" FM_ROOT_OVERRIDE="$ROOT" \
+    FM_STATE_OVERRIDE="$state" FM_DATA_OVERRIDE="$data" FM_CONFIG_OVERRIDE="$config" \
+    FM_PROJECTS_OVERRIDE="$TMP_ROOT/unused-projects" FM_SPAWN_NO_GUARD=1 TMUX="fake,1,0" \
+    FM_TMUX_LOG="$TMP_ROOT/label.log" \
+    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" claude --backend tmux 2>&1)
+  expect_code 0 $? "spawn should succeed"$'\n'"$out"
+
+  assert_grep $'new-window\x1f-dP\x1f-F\x1f#{window_id}\x1f-t\x1ffirstmate:\x1f-n\x1f'"$id"$'\x1f-c' \
+    "$TMP_ROOT/label.log" "new-window did not name the window after the bare task id"
+  assert_no_grep $'\x1f-n\x1ffm-'"$id"$'\x1f' "$TMP_ROOT/label.log" \
+    "new-window must not use the generic fm-<id> prefix for a newly spawned task"
+  assert_grep "window=firstmate:$id" "$state/$id.meta" \
+    "recorded window= must be the bare task id, not fm-<id>"
+  assert_no_grep "window=firstmate:fm-$id" "$state/$id.meta" \
+    "recorded window= must not carry the generic fm-<id> prefix for a newly spawned task"
+  rm -rf "/tmp/fm-$id"
+  pass "fm-spawn.sh: a new tmux task window is named for the bare task id, never the generic fm- prefix"
+}
+
 test_spawn_explicit_backend_flag_beats_autodetect_herdr_env() {
   local proj wt data id state config out fb
   proj="$TMP_ROOT/explicit-backend-project"; wt="$TMP_ROOT/explicit-backend-wt"; data="$TMP_ROOT/explicit-backend-data"
@@ -1111,5 +1144,6 @@ test_spawn_refuses_unknown_backend_flag
 test_spawn_refuses_codex_app_backend_flag
 test_spawn_refuses_unknown_fm_backend_env
 test_spawn_default_backend_writes_no_meta_field
+test_spawn_tmux_window_uses_bare_task_id_label
 test_spawn_explicit_backend_flag_beats_autodetect_herdr_env
 test_spawn_autodetect_nesting_resolves_tmux_silently

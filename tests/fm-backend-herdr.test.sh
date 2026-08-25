@@ -1590,6 +1590,25 @@ test_list_live_scoped_to_this_homes_workspace_only() {
   pass "fm_backend_herdr_list_live: scoped to this home's own workspace, never a sibling home's"
 }
 
+test_list_live_accepts_bare_label_excludes_unrelated_tab() {
+  local dir log resp fb out home
+  dir="$TMP_ROOT/list-live-bare"; mkdir -p "$dir/responses"; log="$dir/log"; resp="$dir/responses"; : > "$log"
+  home="$TMP_ROOT/list-live-bare-home"; mkdir -p "$home"
+  printf '{"result":{"workspaces":[{"workspace_id":"w1","label":"firstmate"}]}}\n' > "$resp/1.out"
+  # A new-format task tab carries the bare validated task id as its label
+  # (fm-spawn.sh's W="$ID"); a tab a captain added by hand, whose label does
+  # not look like a validated task id (contains a space), must not be swept
+  # in as a false positive.
+  printf '{"result":{"tabs":[{"tab_id":"w1:t1","label":"newtask1"},{"tab_id":"w1:t2","label":"My Terminal"}]}}\n' > "$resp/2.out"
+  printf '{"result":{"panes":[{"pane_id":"w1:p1","tab_id":"w1:t1"}]}}\n' > "$resp/3.out"
+  fb=$(make_herdr_fakebin "$dir")
+  out=$( PATH="$fb:$PATH" FM_HOME="$home" FM_HERDR_LOG="$log" FM_HERDR_RESPONSES="$resp" \
+    bash -c '. "$0/bin/backends/herdr.sh"; fm_backend_herdr_list_live fmtest' "$ROOT" )
+  [ "$out" = $'fmtest:w1:p1\tnewtask1' ] \
+    || fail "list_live should report the bare-labeled task tab and exclude the unrelated hand-added tab, got '$out'"
+  pass "fm_backend_herdr_list_live: accepts a new bare-id task label and excludes a non-task-shaped tab"
+}
+
 # --- target parsing, key normalization ---------------------------------------
 
 test_parse_target() {
@@ -3036,6 +3055,7 @@ test_projection_reclaim_replaces_only_exact_husk_and_advances_binding
 test_projection_recovery_is_read_only_and_refuses_live_duplicate_risk
 test_workspace_find_matches_only_this_homes_own_label
 test_list_live_scoped_to_this_homes_workspace_only
+test_list_live_accepts_bare_label_excludes_unrelated_tab
 test_parse_target
 test_normalize_key
 test_capture_calls_pane_read

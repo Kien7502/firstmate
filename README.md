@@ -99,13 +99,16 @@ grok --trust
 **Pi**
 
 ```sh
-pi
+bin/fm-pi-launch.sh
 # or, when the signed wrapper is installed
-FM_PI_HARNESS=pi-signed pi-signed
+bin/fm-pi-launch.sh --signed
 ```
 
+`bin/fm-pi-launch.sh` is also the canonical way to RESTART Pi later: add `--resume` to continue the existing Firstmate conversation (`bin/fm-pi-launch.sh --resume`, or `--signed --resume`), or omit it to start a fresh session.
+It always runs from this repo's root and always loads both required primary extensions, regardless of the shell's current directory - restarting with a bare `pi`/`pi-signed` from the wrong directory silently starts an ordinary Pi session with no Firstmate supervision.
+
 For Grok, `--trust` is needed once per clone so project hooks and the turn-end guard load; `/hooks-trust` inside Grok works too.
-For Pi, approve the project trust prompt once per clone on first launch so the tracked `.pi/extensions/*.ts` files auto-load.
+For Pi, approve the project trust prompt once per clone on first launch so the rest of the tracked `.pi/` project files (skills, the optional `/calm` and pending-command-footer extensions) auto-load; the two required primary extensions load either way.
 Pi's `/calm` toggle hides supported transcript chrome, including canonically classified Firstmate operational user rows, while retaining native working activity and all model context and session data.
 The hidden operational inputs remain ordinary user-role messages with unchanged delivery, ordering, authority, persistence, and exports.
 The preference persists for the effective Firstmate home, and toggling it off restores ordinary rendering.

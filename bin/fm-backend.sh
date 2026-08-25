@@ -410,10 +410,19 @@ fm_backend_of_selector() {  # <raw-target> <resolved-target> <state-dir>
   printf 'tmux'
 }
 
+# The expected caller-facing label for a live task is its bare validated id -
+# what every NEW task tab/window/workspace is created with (fm-spawn.sh's
+# W="$ID"). A task spawned before this label format changed still carries a
+# live "fm-<id>" title; callers never rename it, so every backend-side
+# matcher that consumes this value (fm_backend_zellij_tab_matches_label,
+# fm_backend_cmux_target_ready's scoped-title check, which both normalize
+# away a leading "fm-" before comparing) still recognizes that legacy title
+# under the bare id returned here - see docs/architecture.md "Runtime session
+# backends" for the full backward-compatibility contract.
 fm_backend_expected_label_of_selector() {  # <raw-target> <state-dir>
   local raw=$1 state=$2 id
   id=$(fm_backend_task_id_for_selector "$raw" "$state" 2>/dev/null || true)
-  [ -n "$id" ] && printf 'fm-%s' "$id"
+  [ -n "$id" ] && printf '%s' "$id"
   return 0
 }
 

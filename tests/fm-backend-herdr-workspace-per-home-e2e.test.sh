@@ -186,15 +186,15 @@ pass "real herdr E2E: a crewmate spawned FROM the secondmate-shaped home lands i
 # --- 4. list-live recovery: each home sees only its own tabs ---------------
 
 PRIMARY_LIVE=$(FM_HOME="$PRIMARY_HOME" fm_backend_herdr_list_live "$SESSION")
-assert_contains_local "$PRIMARY_LIVE" "fm-cm1" "the primary home's list_live did not see its own task"
-assert_not_contains_local "$PRIMARY_LIVE" "fm-e2esm1" "the primary home's list_live must not see the secondmate's own task"
-assert_not_contains_local "$PRIMARY_LIVE" "fm-cm2" "the primary home's list_live must not see the secondmate-owned crewmate's task"
+assert_contains_local "$PRIMARY_LIVE" "cm1" "the primary home's list_live did not see its own task"
+assert_not_contains_local "$PRIMARY_LIVE" "e2esm1" "the primary home's list_live must not see the secondmate's own task"
+assert_not_contains_local "$PRIMARY_LIVE" "cm2" "the primary home's list_live must not see the secondmate-owned crewmate's task"
 pass "real herdr E2E: list_live from the primary's own context sees only the primary's own task"
 
 SM_LIVE=$(FM_HOME="$SM_HOME" fm_backend_herdr_list_live "$SESSION")
-assert_contains_local "$SM_LIVE" "fm-e2esm1" "the secondmate home's list_live did not see its own task"
-assert_contains_local "$SM_LIVE" "fm-cm2" "the secondmate home's list_live did not see the crewmate spawned from it"
-assert_not_contains_local "$SM_LIVE" "fm-cm1" "the secondmate home's list_live must not see the primary's task"
+assert_contains_local "$SM_LIVE" "e2esm1" "the secondmate home's list_live did not see its own task"
+assert_contains_local "$SM_LIVE" "cm2" "the secondmate home's list_live did not see the crewmate spawned from it"
+assert_not_contains_local "$SM_LIVE" "cm1" "the secondmate home's list_live must not see the primary's task"
 pass "real herdr E2E: list_live from the secondmate's own context sees only tasks in the secondmate's own workspace (both its own tab and its crewmate's)"
 
 # --- 5. teardown closes the RIGHT tab, and no other ------------------------

@@ -317,13 +317,13 @@ if [ "$PRIMARY_HARNESS" = pi ] || [ "$PRIMARY_HARNESS" = pi-signed ]; then
   PI_WATCH_MARKER="$STATE/.pi-watch-extension-loaded"
   PI_TURNEND_MARKER="$STATE/.pi-turnend-extension-loaded"
   PI_LOCK="$STATE/.lock"
-  PI_RESTART_COMMAND=$PRIMARY_HARNESS
-  [ "$PRIMARY_HARNESS" != pi ] || PI_RESTART_COMMAND='plain pi'
+  PI_LAUNCH_FLAGS='--resume'
+  [ "$PRIMARY_HARNESS" != pi-signed ] || PI_LAUNCH_FLAGS='--signed --resume'
   PI_WATCH_VERSION=$(hash_file "$PI_EXT" || printf '')
   PI_TURNEND_VERSION=$(hash_file "$PI_TURNEND_EXT" || printf '')
   if ! pi_extension_loaded "$PI_WATCH_MARKER" "$PI_WATCH_VERSION" "$PI_LOCK" \
     || ! pi_extension_loaded "$PI_TURNEND_MARKER" "$PI_TURNEND_VERSION" "$PI_LOCK"; then
-    printf 'PI_WATCH_EXTENSION: not loaded - approve Pi project trust once per clone, then restart %s so %s and %s auto-load for turn-end guard and background wake coverage; use -e %s -e %s only if project hooks are not trusted\n' "$PI_RESTART_COMMAND" "$PI_TURNEND_EXT" "$PI_EXT" "$PI_TURNEND_EXT" "$PI_EXT"
+    printf 'PI_WATCH_EXTENSION: not loaded - restart with '\''bin/fm-pi-launch.sh %s'\'' so %s and %s load deterministically regardless of cwd or project trust state\n' "$PI_LAUNCH_FLAGS" "$PI_TURNEND_EXT" "$PI_EXT"
   fi
 fi
 "$SCRIPT_DIR/fm-supervision-instructions.sh" \
@@ -357,7 +357,7 @@ for meta in "$STATE"/*.meta; do
   target=$(fm_backend_target_of_meta "$meta")
   if [ -n "$window" ]; then
     backend=$(fm_backend_of_meta "$meta")
-    if fm_backend_target_exists "$backend" "${target:-$window}" "fm-$id"; then
+    if fm_backend_target_exists "$backend" "${target:-$window}" "$id"; then
       printf 'endpoint: alive (backend=%s window=%s)\n' "$backend" "$window"
     else
       printf 'endpoint: dead (backend=%s window=%s)\n' "$backend" "$window"

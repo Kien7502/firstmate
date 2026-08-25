@@ -984,9 +984,9 @@ test_list_live_filters_by_title_prefix() {
   fb=$(make_cmux_fakebin "$dir")
   out=$( PATH="$fb:$PATH" FM_CMUX_LOG="$dir/log" FM_CMUX_RESPONSES="$dir/responses" \
     bash -c '. "$0/bin/backends/cmux.sh"; fm_backend_cmux_list_live' "$ROOT" )
-  [ "$out" = $'aaaaaaaa-0000-0000-0000-000000000000:bbbbbbbb-1111-1111-1111-111111111111\tfm-task1' ] \
+  [ "$out" = $'aaaaaaaa-0000-0000-0000-000000000000:bbbbbbbb-1111-1111-1111-111111111111\ttask1' ] \
     || fail "list_live should list only the in-home task workspace with its plain label and surface id, got '$out'"
-  pass "fm_backend_cmux_list_live: lists only this home's scoped task workspaces using plain fm-<id> labels"
+  pass "fm_backend_cmux_list_live: lists only this home's scoped task workspaces using plain bare-id labels"
 }
 
 # --- fm-spawn.sh: --secondmate refuses backend=cmux --------------------------
